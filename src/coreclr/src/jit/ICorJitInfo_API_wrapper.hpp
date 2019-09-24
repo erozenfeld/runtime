@@ -1717,6 +1717,15 @@ void WrapICorJitInfo::recordCallSite(
     API_LEAVE(recordCallSite);
 }
 
+void WrapICorJitInfo::recordCallee(
+    CORINFO_METHOD_HANDLE methodHandle  /* IN */,
+    BOOL                  isVirtual     /* IN */)
+{
+    API_ENTER(recordCallee);
+    wrapHnd->recordCallee(methodHandle, isVirtual);
+    API_LEAVE(recordCallee);
+}
+
 void WrapICorJitInfo::recordRelocation(
         void *location, /* IN  */
         void *target, /* IN  */

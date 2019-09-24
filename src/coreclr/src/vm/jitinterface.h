@@ -1073,6 +1073,11 @@ public:
             CORINFO_METHOD_HANDLE methodHandle  /* IN */
             );
 
+    void recordCallee(
+        CORINFO_METHOD_HANDLE methodHandle,  /* IN */
+        BOOL                  isVirtual      /* IN */
+    );
+
     void recordRelocation(
             void *                 location,   /* IN  */
             void *                 target,     /* IN  */
@@ -1279,6 +1284,11 @@ public:
             CORINFO_SIG_INFO *        callSig,      /* IN */
             CORINFO_METHOD_HANDLE     methodHandle  /* IN */
             );
+
+    void recordCallee(
+        CORINFO_METHOD_HANDLE     methodHandle,  /* IN */
+        BOOL                      isVirtual      /* IN */
+    );
 
     void recordRelocation(
             void                    *location,
