@@ -141,7 +141,7 @@ namespace Internal.JitInterface
 
         private bool _isFallbackBodyCompilation; // True if we're compiling a fallback method body after compiling the real body failed
 
-        private void CompileMethodInternal(IMethodNode methodCodeNodeNeedingCode, MethodIL methodIL = null)
+        private void CompileMethodInternal(IMethodNode methodCodeNodeNeedingCode, MethodIL methodIL = null, bool scanOnly = false)
         {
             _isFallbackBodyCompilation = methodIL != null;
 
@@ -217,7 +217,10 @@ namespace Internal.JitInterface
 #endif
             }
 
-            PublishCode();
+            if (!scanOnly)
+            {
+                PublishCode();
+            }
         }
 
         private void PublishCode()
@@ -2833,6 +2836,11 @@ namespace Internal.JitInterface
         {
         }
 
+        private void recordCallee(CORINFO_METHOD_STRUCT_* methodHandle, bool isVirtual)
+        {
+            this._compilation.CallGraph.AddGraphEdge(MethodBeingCompiled, HandleToObject(methodHandle));
+        }
+
         private ArrayBuilder<Relocation> _relocs;
 
         /// <summary>
@@ -3059,6 +3067,11 @@ namespace Internal.JitInterface
                 flags.Set(CorJitFlag.CORJIT_FLAG_USE_SSSE3);
                 flags.Set(CorJitFlag.CORJIT_FLAG_USE_LZCNT);
             }
+
+#if READYTORUN
+            if (_compilation.ScanILOnly)
+                flags.Set(CorJitFlag.CORJIT_FLAG_IMPORT_ONLY);
+#endif
 
             if (this.MethodBeingCompiled.IsNativeCallable)
                 flags.Set(CorJitFlag.CORJIT_FLAG_REVERSE_PINVOKE);

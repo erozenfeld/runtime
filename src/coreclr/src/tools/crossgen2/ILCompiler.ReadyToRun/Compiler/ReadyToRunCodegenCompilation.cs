@@ -197,6 +197,10 @@ namespace ILCompiler
 
         private bool _generateMapFile;
 
+        public CallGraph CallGraph { get; }
+
+        public bool ScanILOnly { get; private set; }
+
         public ReadyToRunSymbolNodeFactory SymbolNodeFactory { get; }
 
         internal ReadyToRunCodegenCompilation(
@@ -221,6 +225,8 @@ namespace ILCompiler
             _inputFilePath = inputFilePath;
 
             _corInfoImpls = new ConditionalWeakTable<Thread, CorInfoImpl>();
+
+            CallGraph = new CallGraph();
         }
 
         public override void Compile(string outputFile)
@@ -262,15 +268,46 @@ namespace ILCompiler
 
         protected override void ComputeDependencyNodeDependencies(List<DependencyNodeCore<NodeFactory>> obj)
         {
+            ScanILOnly = true;
+
+            List<MethodWithGCInfo> methodsToCompile = new List<MethodWithGCInfo>();
+
+            ConditionalWeakTable<Thread, CorInfoImpl> cwt = new ConditionalWeakTable<Thread, CorInfoImpl>();
+            // Add all nodes to the call graph as roots
+            foreach (DependencyNodeCore<NodeFactory> dependency in obj)
+            {
+                MethodWithGCInfo methodCodeNodeNeedingCode = dependency as MethodWithGCInfo;
+                MethodDesc method = methodCodeNodeNeedingCode.Method;
+
+                methodsToCompile.Add(methodCodeNodeNeedingCode);
+                CallGraph.AddRootNode(method);
+                try
+                {
+                    CorInfoImpl corInfoImpl = cwt.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this, _jitConfigProvider));
+                    corInfoImpl.CompileMethod(methodCodeNodeNeedingCode, ScanILOnly);
+                }
+                catch (TypeSystemException)
+                {
+                }
+                catch (RequiresRuntimeJitException)
+                {
+                }
+                catch (CodeGenerationFailedException) when (_resilient)
+                {
+                }
+            }
+
+            ScanILOnly = false;
+
             using (PerfEventSource.StartStopEvents.JitEvents())
             {
+                // TODO: sort the call graph nodes topologically to perform bottom-up compilation.
                 ParallelOptions options = new ParallelOptions
                 {
                     MaxDegreeOfParallelism = _parallelism
                 };
                 Parallel.ForEach(obj, options, dependency =>
                 {
-                    MethodWithGCInfo methodCodeNodeNeedingCode = dependency as MethodWithGCInfo;
                     MethodDesc method = methodCodeNodeNeedingCode.Method;
 
                     if (Logger.IsVerbose)
@@ -283,7 +320,7 @@ namespace ILCompiler
                     {
                         using (PerfEventSource.StartStopEvents.JitMethodEvents())
                         {
-                            CorInfoImpl corInfoImpl = _corInfoImpls.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this));
+                            CorInfoImpl corInfoImpl = cwt.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this));
                             corInfoImpl.CompileMethod(methodCodeNodeNeedingCode);
                         }
                     }
