@@ -266,24 +266,39 @@ namespace ILCompiler
             return TypeSystemContext.SystemModule.GetKnownType("System", "RuntimeType");
         }
 
+        public Queue<MethodWithGCInfo> MethodsToScan { get; set; }
+
         protected override void ComputeDependencyNodeDependencies(List<DependencyNodeCore<NodeFactory>> obj)
         {
             ScanILOnly = true;
 
+            MethodsToScan = new Queue<MethodWithGCInfo>();
             List<MethodWithGCInfo> methodsToCompile = new List<MethodWithGCInfo>();
 
-            ConditionalWeakTable<Thread, CorInfoImpl> cwt = new ConditionalWeakTable<Thread, CorInfoImpl>();
             // Add all nodes to the call graph as roots
             foreach (DependencyNodeCore<NodeFactory> dependency in obj)
             {
                 MethodWithGCInfo methodCodeNodeNeedingCode = dependency as MethodWithGCInfo;
+                if (methodCodeNodeNeedingCode.Scanned)
+                    continue;
+
+                if (methodCodeNodeNeedingCode.ScheduledForScanning)
+                    continue;
+
                 MethodDesc method = methodCodeNodeNeedingCode.Method;
 
-                methodsToCompile.Add(methodCodeNodeNeedingCode);
+                MethodsToScan.Enqueue(methodCodeNodeNeedingCode);
+                methodCodeNodeNeedingCode.ScheduledForScanning = true;
                 CallGraph.AddRootNode(method);
+            }
+
+            while(MethodsToScan.Count > 0)
+            {
+                MethodWithGCInfo method = MethodsToScan.Dequeue();
+                CallGraph.AddNode(method.Method);
                 try
                 {
-                    CorInfoImpl corInfoImpl = cwt.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this, _jitConfigProvider));
+                    CorInfoImpl corInfoImpl = _corInfoImpls.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this));
                     corInfoImpl.CompileMethod(methodCodeNodeNeedingCode, ScanILOnly);
                 }
                 catch (TypeSystemException)
@@ -295,6 +310,8 @@ namespace ILCompiler
                 catch (CodeGenerationFailedException) when (_resilient)
                 {
                 }
+                method.Scanned = true;
+                methodsToCompile.Add(method);
             }
 
             ScanILOnly = false;
@@ -306,7 +323,7 @@ namespace ILCompiler
                 {
                     MaxDegreeOfParallelism = _parallelism
                 };
-                Parallel.ForEach(obj, options, dependency =>
+                Parallel.ForEach(methodsToCompile, options, methodCodeNodeNeedingCode =>
                 {
                     MethodDesc method = methodCodeNodeNeedingCode.Method;
 
@@ -320,8 +337,8 @@ namespace ILCompiler
                     {
                         using (PerfEventSource.StartStopEvents.JitMethodEvents())
                         {
-                            CorInfoImpl corInfoImpl = cwt.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this));
-                            corInfoImpl.CompileMethod(methodCodeNodeNeedingCode);
+                            CorInfoImpl corInfoImpl = _corInfoImpls.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this));
+                            corInfoImpl.CompileMethod(methodCodeNodeNeedingCode, ScanILOnly);
                         }
                     }
                     catch (TypeSystemException ex)
