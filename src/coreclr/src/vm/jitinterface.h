@@ -1075,7 +1075,12 @@ public:
 
     void recordCallee(
         CORINFO_METHOD_HANDLE methodHandle,  /* IN */
+        void*                 addr,          /* IN */
         BOOL                  isVirtual      /* IN */
+    );
+
+    void recordMethodPointer(
+        void*                 addr
     );
 
     void recordRelocation(
@@ -1287,7 +1292,12 @@ public:
 
     void recordCallee(
         CORINFO_METHOD_HANDLE     methodHandle,  /* IN */
+        void*                     addr,          /* IN */
         BOOL                      isVirtual      /* IN */
+    );
+
+    void recordMethodPointer(
+        void*                     addr
     );
 
     void recordRelocation(

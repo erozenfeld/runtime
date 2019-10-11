@@ -29,6 +29,7 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
         private List<ISymbolNode> _fixups;
         private MethodDesc[] _inlinedMethods;
 
+
         public MethodWithGCInfo(MethodDesc methodDesc, SignatureContext signatureContext)
         {
             GCInfoNode = new MethodGCInfoNode(this);
@@ -46,6 +47,10 @@ namespace ILCompiler.DependencyAnalysis.ReadyToRun
         public MethodDesc Method => _method;
 
         public List<ISymbolNode> Fixups => _fixups;
+
+        public bool ScheduledForScanning { get; set; }
+
+        public bool Scanned { get; set; }
 
         public bool IsEmpty => _methodCode.Data.Length == 0;
 
