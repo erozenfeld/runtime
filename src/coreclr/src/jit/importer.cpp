@@ -1936,6 +1936,10 @@ GenTree* Compiler::impMethodPointer(CORINFO_RESOLVED_TOKEN* pResolvedToken, CORI
             if (opts.IsReadyToRun())
             {
                 op1->AsFptrVal()->gtEntryPoint = pCallInfo->codePointerLookup.constLookup;
+                if (compIsForImportOnly())
+                {
+                    info.compCompHnd->recordMethodPointer(op1->gtFptrVal.gtEntryPoint.addr);
+                }
             }
             else
             {
@@ -5815,6 +5819,11 @@ GenTree* Compiler::impImportLdvirtftn(GenTree*                thisPtr,
 
             call->setEntryPoint(pCallInfo->codePointerLookup.constLookup);
 
+            if (compIsForImportOnly())
+            {
+                info.compCompHnd->recordMethodPointer(pCallInfo->codePointerLookup.constLookup.addr);
+            }
+
             return call;
         }
 
@@ -8444,15 +8453,19 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
         }
     }
 
+#ifdef FEATURE_READYTORUN_COMPILER
     if (compIsForImportOnly())
     {
+        GenTreeCall*  callNode = call->AsCall();
         // Don't report indirect calls for now.
-        if (call->AsCall()->gtCallType != CT_INDIRECT)
+        if (callNode->gtCallType != CT_INDIRECT)
         {
             bool isVirtual = ((call->gtFlags && GTF_CALL_VIRT_KIND_MASK) != GTF_CALL_NONVIRT);
-            info.compCompHnd->recordCallee(call->AsCall()->gtCallMethHnd, isVirtual);
+            void* addr = (callNode->gtEntryPoint.addr == nullptr) ? call->gtCall.gtStubCallStubAddr : callNode->gtEntryPoint.addr;
+            info.compCompHnd->recordCallee(callNode->gtCallMethHnd, addr, isVirtual);
         }
     }
+#endif
 
     //-------------------------------------------------------------------------
     // The "this" pointer for "newobj"
@@ -18198,10 +18211,6 @@ void Compiler::impImport(BasicBlock* method)
             impImportBlock(dsc->pdBB);
 
             if (compDonotInline())
-            {
-                return;
-            }
-            if (compIsForImportOnly() && !tiVerificationNeeded)
             {
                 return;
             }
