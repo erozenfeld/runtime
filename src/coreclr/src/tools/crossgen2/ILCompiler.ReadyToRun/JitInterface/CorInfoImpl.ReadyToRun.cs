@@ -213,7 +213,7 @@ namespace Internal.JitInterface
             {
                 if (!ShouldSkipCompilation(MethodBeingCompiled))
                 {
-                    CompileMethodInternal(methodCodeNodeNeedingCode);
+                    CompileMethodInternal(methodCodeNodeNeedingCode, null, scanOnly);
                     if (!scanOnly)
                     {
                         codeGotPublished = true;
@@ -222,14 +222,12 @@ namespace Internal.JitInterface
             }
             finally
             {
-                if (!codeGotPublished)
+                if (!scanOnly && !codeGotPublished)
                 {
                     PublishEmptyCode();
                 }
                 CompileMethodCleanup();
             }
-
-            CompileMethodInternal(methodCodeNodeNeedingCode, null, scanOnly);
         }
 
         private SignatureContext GetSignatureContext()
