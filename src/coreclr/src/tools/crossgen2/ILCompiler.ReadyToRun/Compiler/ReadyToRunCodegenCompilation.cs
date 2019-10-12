@@ -273,7 +273,6 @@ namespace ILCompiler
             ScanILOnly = true;
 
             MethodsToScan = new Queue<MethodWithGCInfo>();
-            List<MethodWithGCInfo> methodsToCompile = new List<MethodWithGCInfo>();
 
             // Add all nodes to the call graph as roots
             foreach (DependencyNodeCore<NodeFactory> dependency in obj)
@@ -289,13 +288,18 @@ namespace ILCompiler
 
                 MethodsToScan.Enqueue(methodCodeNodeNeedingCode);
                 methodCodeNodeNeedingCode.ScheduledForScanning = true;
-                CallGraph.AddRootNode(method);
+                CallGraph.AddRootNode(methodCodeNodeNeedingCode);
             }
 
-            while(MethodsToScan.Count > 0)
+            if (MethodsToScan.Count == 0)
+            {
+                return;
+            }
+
+            while (MethodsToScan.Count > 0)
             {
                 MethodWithGCInfo method = MethodsToScan.Dequeue();
-                CallGraph.AddNode(method.Method);
+                CallGraph.AddNode(method);
                 try
                 {
                     CorInfoImpl corInfoImpl = _corInfoImpls.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this));
@@ -311,7 +315,6 @@ namespace ILCompiler
                 {
                 }
                 method.Scanned = true;
-                methodsToCompile.Add(method);
             }
 
             ScanILOnly = false;
@@ -323,8 +326,9 @@ namespace ILCompiler
                 {
                     MaxDegreeOfParallelism = _parallelism
                 };
-                Parallel.ForEach(methodsToCompile, options, methodCodeNodeNeedingCode =>
+                Parallel.ForEach(CallGraph.GetNodes(), options, callGraphNode =>
                 {
+                    MethodWithGCInfo methodCodeNodeNeedingCode = callGraphNode.Method;
                     MethodDesc method = methodCodeNodeNeedingCode.Method;
 
                     if (Logger.IsVerbose)
