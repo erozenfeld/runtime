@@ -321,12 +321,14 @@ namespace ILCompiler
 
             using (PerfEventSource.StartStopEvents.JitEvents())
             {
-                // TODO: sort the call graph nodes topologically to perform bottom-up compilation.
                 ParallelOptions options = new ParallelOptions
                 {
                     MaxDegreeOfParallelism = _parallelism
                 };
-                Parallel.ForEach(CallGraph.GetNodes(), options, callGraphNode =>
+
+                // Perform bottom-up compilation.
+                ICollection<CallGraphNode> postOrder = CallGraph.GetPostOrder();
+                Parallel.ForEach(postOrder, options, callGraphNode =>
                 {
                     MethodWithGCInfo methodCodeNodeNeedingCode = callGraphNode.Method;
                     MethodDesc method = methodCodeNodeNeedingCode.Method;
