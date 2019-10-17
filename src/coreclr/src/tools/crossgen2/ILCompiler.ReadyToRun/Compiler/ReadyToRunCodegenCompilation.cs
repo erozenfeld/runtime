@@ -303,7 +303,7 @@ namespace ILCompiler
                 try
                 {
                     CorInfoImpl corInfoImpl = _corInfoImpls.GetValue(Thread.CurrentThread, thread => new CorInfoImpl(this));
-                    corInfoImpl.CompileMethod(methodCodeNodeNeedingCode, ScanILOnly);
+                    corInfoImpl.CompileMethod(method, ScanILOnly);
                 }
                 catch (TypeSystemException)
                 {
