@@ -193,10 +193,16 @@ namespace ILCompiler
 
         private bool _resilient;
 
+<<<<<<< HEAD
         private int _parallelism;
 
         private bool _generateMapFile;
 
+||||||| merged common ancestors
+=======
+        private bool _scanningDone;
+
+>>>>>>> Add recordUnusedParameters and getUnusedParameters crossgen2 implementation.
         public CallGraph CallGraph { get; }
 
         public bool ScanILOnly { get; private set; }
@@ -270,6 +276,14 @@ namespace ILCompiler
 
         protected override void ComputeDependencyNodeDependencies(List<DependencyNodeCore<NodeFactory>> obj)
         {
+            ConditionalWeakTable<Thread, CorInfoImpl> cwt = new ConditionalWeakTable<Thread, CorInfoImpl>();
+
+            if (_scanningDone)
+            {
+                CompileMethods(obj, methodObj => methodObj as MethodWithGCInfo, cwt);
+                return;
+            }
+
             ScanILOnly = true;
 
             MethodsToScan = new Queue<MethodWithGCInfo>();
@@ -291,11 +305,7 @@ namespace ILCompiler
                 CallGraph.AddRootNode(methodCodeNodeNeedingCode);
             }
 
-            if (MethodsToScan.Count == 0)
-            {
-                return;
-            }
-
+            Console.WriteLine("Starting scanning");
             while (MethodsToScan.Count > 0)
             {
                 MethodWithGCInfo method = MethodsToScan.Dequeue();
@@ -317,8 +327,17 @@ namespace ILCompiler
                 method.Scanned = true;
             }
 
-            ScanILOnly = false;
+            _scanningDone = true;
+            Console.WriteLine("Finished scanning");
 
+            ScanILOnly = false;
+            IEnumerable<CallGraphNode> postOrder = CallGraph.GetPostOrder();
+            // Perform bottom-up compilation.
+            CompileMethods(postOrder, methodObj => (methodObj as CallGraphNode).Method, cwt);
+        }
+
+        private void CompileMethods(IEnumerable<object> methods, Func<object, MethodWithGCInfo> getMethodWithGCInfo, ConditionalWeakTable<Thread, CorInfoImpl> cwt)
+        {
             using (PerfEventSource.StartStopEvents.JitEvents())
             {
                 ParallelOptions options = new ParallelOptions
@@ -330,7 +349,7 @@ namespace ILCompiler
                 ICollection<CallGraphNode> postOrder = CallGraph.GetPostOrder();
                 Parallel.ForEach(postOrder, options, callGraphNode =>
                 {
-                    MethodWithGCInfo methodCodeNodeNeedingCode = callGraphNode.Method;
+                    MethodWithGCInfo methodCodeNodeNeedingCode = getMethodWithGCInfo(obj);
                     MethodDesc method = methodCodeNodeNeedingCode.Method;
 
                     if (Logger.IsVerbose)
