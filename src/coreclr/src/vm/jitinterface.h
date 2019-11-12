@@ -1080,7 +1080,15 @@ public:
     );
 
     void recordMethodPointer(
-        void*                 addr
+        void*                 addr  /* IN */
+    );
+
+    void recordUnusedParameters(
+        UINT32                params    /* IN */
+    );
+
+    UINT32 getUnusedParameters(
+        CORINFO_METHOD_HANDLE methodHandle  /* IN */
     );
 
     void recordRelocation(
@@ -1297,7 +1305,15 @@ public:
     );
 
     void recordMethodPointer(
-        void*                     addr
+        void*                 addr  /* IN */
+    );
+
+    void recordUnusedParameters(
+        UINT32                params    /* IN */
+    );
+
+    UINT32 getUnusedParameters(
+        CORINFO_METHOD_HANDLE methodHandle  /* IN */
     );
 
     void recordRelocation(
