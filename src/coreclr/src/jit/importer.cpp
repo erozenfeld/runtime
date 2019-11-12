@@ -1938,7 +1938,7 @@ GenTree* Compiler::impMethodPointer(CORINFO_RESOLVED_TOKEN* pResolvedToken, CORI
                 op1->AsFptrVal()->gtEntryPoint = pCallInfo->codePointerLookup.constLookup;
                 if (compIsForImportOnly())
                 {
-                    info.compCompHnd->recordMethodPointer(op1->gtFptrVal.gtEntryPoint.addr);
+                    info.compCompHnd->recordMethodPointer(op1->AsFptrVal()->gtEntryPoint.addr);
                 }
             }
             else
@@ -8461,7 +8461,7 @@ var_types Compiler::impImportCall(OPCODE                  opcode,
         if (callNode->gtCallType != CT_INDIRECT)
         {
             bool isVirtual = ((call->gtFlags && GTF_CALL_VIRT_KIND_MASK) != GTF_CALL_NONVIRT);
-            void* addr = (callNode->gtEntryPoint.addr == nullptr) ? call->gtCall.gtStubCallStubAddr : callNode->gtEntryPoint.addr;
+            void* addr = (callNode->gtEntryPoint.addr == nullptr) ? callNode->gtStubCallStubAddr : callNode->gtEntryPoint.addr;
             info.compCompHnd->recordCallee(callNode->gtCallMethHnd, addr, isVirtual);
         }
     }
