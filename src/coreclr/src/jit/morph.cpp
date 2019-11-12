@@ -1650,7 +1650,7 @@ void fgArgInfo::SortArgs()
 
             // put constants at the end of the table
             //
-            if (argx->gtOper == GT_CNS_INT)
+            if ((argx->gtOper == GT_CNS_INT) || (argx->gtOper == GT_NOP))
             {
                 noway_assert(curInx <= endTab);
 
@@ -2060,7 +2060,15 @@ void fgArgInfo::EvalArgsToTemps()
 
         if (curArgTabEntry->needTmp)
         {
-            if (curArgTabEntry->isTmp == true)
+            bool commasOnly = true;
+            GenTree* effectiveValue = argx->gtEffectiveVal(commasOnly);
+            if (effectiveValue->gtOper == GT_NOP)
+            {
+                setupArg = argx;
+                defArg = compiler->gtNewOperNode(GT_NOP, TYP_VOID, nullptr);
+                setupArg->gtFlags |= GTF_LATE_ARG;
+            }
+            else if (curArgTabEntry->isTmp == true)
             {
                 // Create a copy of the temp to go into the late argument list
                 defArg = compiler->fgMakeTmpArgNode(curArgTabEntry);
@@ -2766,6 +2774,12 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
     //
     call->fgArgInfo = new (this, CMK_Unknown) fgArgInfo(this, call, numArgs);
 
+    unsigned int unusedParameters = 0;
+    if ((call->gtCallType == CT_USER_FUNC) && ((call->gtFlags & GTF_CALL_VIRT_KIND_MASK) == GTF_CALL_NONVIRT))
+    {
+        unusedParameters = info.compCompHnd->getUnusedParameters(call->gtCallMethHnd);
+    }
+
     // Add the 'this' argument value, if present.
     if (call->gtCallThisArg != nullptr)
     {
@@ -2774,10 +2788,56 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
         assert(call->gtCallType == CT_USER_FUNC || call->gtCallType == CT_INDIRECT);
         assert(varTypeIsGC(argx) || (argx->gtType == TYP_I_IMPL));
 
+        bool thisIsUnused = ((unusedParameters & 1) != 0);
+        bool thisHasSideEffects = ((argx->gtFlags & GTF_SIDE_EFFECT) != 0);
+
+        if (thisIsUnused)
+        {
+#ifdef DEBUG
+            if (verbose)
+            {
+                JITDUMP("\nUnused argument:\n");
+                gtDispTree(argx);
+                JITDUMP("\n");
+            }
+#endif
+            if (thisHasSideEffects)
+            {
+                if (varTypeIsGC(argx))
+                {
+                    argx = gtNewOperNode(GT_COMMA, argx->gtType, argx, new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0));
+                    call->gtCallThisArg->SetNode(argx);
+                }
+                else
+                {
+                    argx = gtNewOperNode(GT_COMMA, TYP_VOID, argx, gtNewOperNode(GT_NOP, TYP_VOID, nullptr));
+                    call->gtCallThisArg->SetNode(argx);
+                }
+            }
+            else
+            {
+                if (varTypeIsGC(argx))
+                {
+                    argx = new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0);
+                    call->gtCallThisArg->SetNode(argx);
+                }
+                else
+                {
+                    argx = gtNewOperNode(GT_NOP, TYP_VOID, nullptr);
+                    call->gtCallThisArg->SetNode(argx);
+                }
+            }
+        }
+
         // This is a register argument - put it in the table.
-        call->fgArgInfo->AddRegArg(argIndex, argx, call->gtCallThisArg, genMapIntRegArgNumToRegNum(intArgRegNum), 1, 1,
-                                   false, callIsVararg UNIX_AMD64_ABI_ONLY_ARG(REG_STK) UNIX_AMD64_ABI_ONLY_ARG(0)
-                                              UNIX_AMD64_ABI_ONLY_ARG(0) UNIX_AMD64_ABI_ONLY_ARG(nullptr));
+        fgArgTabEntry*  argTabEntry = call->fgArgInfo->AddRegArg(argIndex, argx, call->gtCallThisArg, genMapIntRegArgNumToRegNum(intArgRegNum), 1, 1,
+                                                                    false, callIsVararg UNIX_AMD64_ABI_ONLY_ARG(REG_STK) UNIX_AMD64_ABI_ONLY_ARG(0)
+                                                                    UNIX_AMD64_ABI_ONLY_ARG(0) UNIX_AMD64_ABI_ONLY_ARG(nullptr));
+
+        if (thisIsUnused && !varTypeIsGC(argx))
+        {
+            argTabEntry->setRegNum(0, REG_NA);
+        }
 
         intArgRegNum++;
 #ifdef WINDOWS_AMD64_ABI
@@ -3324,6 +3384,49 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
         }
 #endif // TARGET_ARM
 
+        bool argIsUnused = ((unusedParameters & (1 << argIndex)) != 0);
+        bool argHasSideEffects = ((argx->gtFlags & GTF_SIDE_EFFECT) != 0);
+
+        if (argIsUnused)
+        {
+#ifdef DEBUG
+            if (verbose)
+            {
+                JITDUMP("\nUnused argument:\n");
+                gtDispTree(argx);
+                JITDUMP("\n");
+            }
+#endif
+            if (argHasSideEffects)
+            {
+                if (varTypeIsGC(argx))
+                {
+                    GenTree* nullPtr = new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0);
+                    argx = gtNewOperNode(GT_COMMA, argx->gtType, argx, nullPtr);
+                    args->SetNode(argx);
+                }
+                else
+                {
+                    GenTree* nop = gtNewOperNode(GT_NOP, TYP_VOID, nullptr);
+                    argx = gtNewOperNode(GT_COMMA, TYP_VOID, argx, nop);
+                    args->SetNode(argx);
+                }
+            }
+            else
+            {
+                if (varTypeIsGC(argx))
+                {
+                    argx = new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0);
+                    args->SetNode(argx);
+                }
+                else
+                {
+                    argx = gtNewOperNode(GT_NOP, TYP_VOID, nullptr);
+                    args->SetNode(argx);
+                }
+            }
+        }
+
         // Now create the fgArgTabEntry.
         fgArgTabEntry* newArgEntry;
         if (isRegArg)
@@ -3383,6 +3486,11 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
 
             newArgEntry->SetIsBackFilled(isBackFilled);
             newArgEntry->isNonStandard = isNonStandard;
+
+            if (argIsUnused && !varTypeIsGC(argx))
+            {
+                newArgEntry->setRegNum(0, REG_NA);
+            }
 
             // Set up the next intArgRegNum and fltArgRegNum values.
             if (!isBackFilled)

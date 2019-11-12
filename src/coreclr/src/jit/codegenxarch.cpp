@@ -5340,7 +5340,7 @@ void CodeGen::genCallInstruction(GenTreeCall* call)
         fgArgTabEntry* curArgTabEntry = compiler->gtArgEntryByNode(call, argNode->gtSkipReloadOrCopy());
         assert(curArgTabEntry);
 
-        if (curArgTabEntry->GetRegNum() == REG_STK)
+        if (curArgTabEntry->GetRegNum() == REG_STK || curArgTabEntry->GetRegNum() == REG_NA)
         {
             continue;
         }

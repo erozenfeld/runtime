@@ -247,18 +247,22 @@ unsigned StackLevelSetter::PopArgumentsFromCall(GenTreeCall* call)
             if (argTab->numSlots != 0)
             {
                 GenTree* node = argTab->GetNode();
-                assert(node->OperIsPutArgStkOrSplit());
 
-                GenTreePutArgStk* putArg = node->AsPutArgStk();
+                if (node->gtOper != GT_NOP)
+                {
+                    assert(node->OperIsPutArgStkOrSplit());
+
+                    GenTreePutArgStk* putArg = node->AsPutArgStk();
 
 #if !FEATURE_FIXED_OUT_ARGS
-                assert(argTab->numSlots == putArg->gtNumSlots);
+                    assert(argTab->numSlots == putArg->gtNumSlots);
 #endif // !FEATURE_FIXED_OUT_ARGS
 
-                putArgNumSlots.Set(putArg, argTab->numSlots);
+                    putArgNumSlots.Set(putArg, argTab->numSlots);
 
-                usedStackSlotsCount += argTab->numSlots;
-                AddStackLevel(argTab->numSlots);
+                    usedStackSlotsCount += argTab->numSlots;
+                    AddStackLevel(argTab->numSlots);
+                }
             }
         }
     }

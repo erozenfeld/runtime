@@ -1208,7 +1208,7 @@ void CodeGen::genNumberOperandUse(GenTree* const operand, int& useNum) const
     assert(operand != nullptr);
 
     // Ignore argument placeholders.
-    if (operand->OperGet() == GT_ARGPLACE)
+    if (operand->OperGet() == GT_ARGPLACE || operand->OperGet() == GT_NOP)
     {
         return;
     }

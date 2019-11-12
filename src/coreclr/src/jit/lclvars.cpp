@@ -4223,6 +4223,9 @@ void Compiler::lvaComputeUnusedParameters()
                 ++paramCount;
             }
         }
+
+        info.compCompHnd->recordUnusedParameters(unusedParamsBits);
+    }
 }
 
 void Compiler::lvaAllocOutgoingArgSpaceVar()
