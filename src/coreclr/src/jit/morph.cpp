@@ -2791,7 +2791,8 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
         bool thisIsUnused = ((unusedParameters & 1) != 0);
         bool thisHasSideEffects = ((argx->gtFlags & GTF_SIDE_EFFECT) != 0);
 
-        if (thisIsUnused)
+        if (thisIsUnused && ((call->gtFlags & GTF_CALL_NULLCHECK) == 0) &&
+            (!argx->OperIs(GT_LCL_VAR) || (argx->AsLclVarCommon()->GetLclNum() != info.compThisArg)))
         {
 #ifdef DEBUG
             if (verbose)
@@ -2803,29 +2804,14 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
 #endif
             if (thisHasSideEffects)
             {
-                if (varTypeIsGC(argx))
-                {
-                    argx = gtNewOperNode(GT_COMMA, argx->gtType, argx, new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0));
-                    call->gtCallThisArg->SetNode(argx);
-                }
-                else
-                {
-                    argx = gtNewOperNode(GT_COMMA, TYP_VOID, argx, gtNewOperNode(GT_NOP, TYP_VOID, nullptr));
-                    call->gtCallThisArg->SetNode(argx);
-                }
+                //Don't try to optimize this case as it causes a number of regressions.
+                //argx = gtNewOperNode(GT_COMMA, argx->gtType, argx, new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0));
+                //call->gtCallThisArg->SetNode(argx);
             }
             else
             {
-                if (varTypeIsGC(argx))
-                {
-                    argx = new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0);
-                    call->gtCallThisArg->SetNode(argx);
-                }
-                else
-                {
-                    argx = gtNewOperNode(GT_NOP, TYP_VOID, nullptr);
-                    call->gtCallThisArg->SetNode(argx);
-                }
+                argx = new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0);
+                call->gtCallThisArg->SetNode(argx);
             }
         }
 
@@ -2833,11 +2819,6 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
         fgArgTabEntry*  argTabEntry = call->fgArgInfo->AddRegArg(argIndex, argx, call->gtCallThisArg, genMapIntRegArgNumToRegNum(intArgRegNum), 1, 1,
                                                                     false, callIsVararg UNIX_AMD64_ABI_ONLY_ARG(REG_STK) UNIX_AMD64_ABI_ONLY_ARG(0)
                                                                     UNIX_AMD64_ABI_ONLY_ARG(0) UNIX_AMD64_ABI_ONLY_ARG(nullptr));
-
-        if (thisIsUnused && !varTypeIsGC(argx))
-        {
-            argTabEntry->setRegNum(0, REG_NA);
-        }
 
         intArgRegNum++;
 #ifdef WINDOWS_AMD64_ABI
@@ -2941,6 +2922,7 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
         // Change the node to TYP_I_IMPL so we don't report GC info
         // NOTE: We deferred this from the importer because of the inliner.
 
+        var_types originalArgType = argx->gtType;
         if (argx->IsLocalAddrExpr() != nullptr)
         {
             argx->gtType = TYP_I_IMPL;
@@ -3386,8 +3368,10 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
 
         bool argIsUnused = ((unusedParameters & (1 << argIndex)) != 0);
         bool argHasSideEffects = ((argx->gtFlags & GTF_SIDE_EFFECT) != 0);
+        bool passingArg = true;
 
-        if (argIsUnused)
+        if (argIsUnused &&
+            (!argx->OperIs(GT_LCL_VAR) || (argx->AsLclVarCommon()->GetLclNum() != argIndex)))
         {
 #ifdef DEBUG
             if (verbose)
@@ -3399,22 +3383,29 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
 #endif
             if (argHasSideEffects)
             {
-                if (varTypeIsGC(argx))
+                if (varTypeIsGC(originalArgType))
                 {
-                    GenTree* nullPtr = new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0);
-                    argx = gtNewOperNode(GT_COMMA, argx->gtType, argx, nullPtr);
-                    args->SetNode(argx);
+                    //Don't try to optimize this case as it causes a number of regressions.
+                    //GenTree* nullPtr = new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0);
+                    //argx = gtNewOperNode(GT_COMMA, argx->gtType, argx, nullPtr);
+                    //args->SetNode(argx);
                 }
                 else
                 {
+                    if (argx->OperIsBlk())
+                    {
+                        argx->SetOper(GT_NULLCHECK);
+                    }
+
                     GenTree* nop = gtNewOperNode(GT_NOP, TYP_VOID, nullptr);
                     argx = gtNewOperNode(GT_COMMA, TYP_VOID, argx, nop);
                     args->SetNode(argx);
+                    passingArg = false;
                 }
             }
             else
             {
-                if (varTypeIsGC(argx))
+                if (varTypeIsGC(originalArgType))
                 {
                     argx = new (this, GT_CNS_INT) GenTreeIntCon(argx->gtType, 0);
                     args->SetNode(argx);
@@ -3423,6 +3414,7 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
                 {
                     argx = gtNewOperNode(GT_NOP, TYP_VOID, nullptr);
                     args->SetNode(argx);
+                    passingArg = false;
                 }
             }
         }
@@ -3487,7 +3479,7 @@ void Compiler::fgInitArgInfo(GenTreeCall* call)
             newArgEntry->SetIsBackFilled(isBackFilled);
             newArgEntry->isNonStandard = isNonStandard;
 
-            if (argIsUnused && !varTypeIsGC(argx))
+            if (!passingArg)
             {
                 newArgEntry->setRegNum(0, REG_NA);
             }

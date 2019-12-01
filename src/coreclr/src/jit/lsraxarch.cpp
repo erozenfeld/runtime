@@ -1166,6 +1166,11 @@ int LinearScan::BuildCall(GenTreeCall* call)
 
         if (curArgTabEntry->GetRegNum() == REG_STK)
         {
+            if (argNode->gtOper == GT_NOP)
+            {
+                continue;
+            }
+
             // late arg that is not passed in a register
             assert(argNode->gtOper == GT_PUTARG_STK);
 
