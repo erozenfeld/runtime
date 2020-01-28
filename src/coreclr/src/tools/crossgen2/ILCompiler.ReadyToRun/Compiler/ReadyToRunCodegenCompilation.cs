@@ -193,16 +193,12 @@ namespace ILCompiler
 
         private bool _resilient;
 
-<<<<<<< HEAD
         private int _parallelism;
 
         private bool _generateMapFile;
 
-||||||| merged common ancestors
-=======
         private bool _scanningDone;
 
->>>>>>> Add recordUnusedParameters and getUnusedParameters crossgen2 implementation.
         public CallGraph CallGraph { get; }
 
         public bool ScanILOnly { get; private set; }
@@ -346,8 +342,7 @@ namespace ILCompiler
                 };
 
                 // Perform bottom-up compilation.
-                ICollection<CallGraphNode> postOrder = CallGraph.GetPostOrder();
-                Parallel.ForEach(postOrder, options, callGraphNode =>
+                Parallel.ForEach(methods, options, obj =>
                 {
                     MethodWithGCInfo methodCodeNodeNeedingCode = getMethodWithGCInfo(obj);
                     MethodDesc method = methodCodeNodeNeedingCode.Method;
