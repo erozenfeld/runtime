@@ -13311,26 +13311,6 @@ DONE_MORPHING_CHILDREN:
 
             if (oper == GT_ADD)
             {
-                if (opts.OptimizationEnabled() && op1->OperIs(GT_NEG))
-                {
-                    // -a + b => b - a
-                    // ADD((NEG(c), b) => SUB(b, c)
-                    // tree: ADD
-                    // op1: NEG
-                    // op2: b
-                    // op1Child: c
-                    GenTree* op1Child = op1->AsOp()->gtOp1; // c
-                    oper = GT_SUB;
-                    tree->SetOper(oper);
-                    tree->AsOp()->gtOp1 = op2;
-                    tree->AsOp()->gtOp2 = op1Child;
-
-                    DEBUG_DESTROY_NODE(op1);
-
-                    op1 = op2;
-                    op2 = op1Child;
-                }
-
                 /* Fold "((x+icon1)+(y+icon2)) to ((x+y)+(icon1+icon2))" */
 
                 if (op1->gtOper == GT_ADD && op2->gtOper == GT_ADD && !gtIsActiveCSE_Candidate(op2) &&
@@ -13447,6 +13427,26 @@ DONE_MORPHING_CHILDREN:
                             return op1;
                         }
                     }
+                }
+
+                if (opts.OptimizationEnabled() && op1->OperIs(GT_NEG))
+                {
+                    // -a + b => b - a
+                    // ADD((NEG(c), b) => SUB(b, c)
+                    // tree: ADD
+                    // op1: NEG
+                    // op2: b
+                    // op1Child: c
+                    GenTree* op1Child = op1->AsOp()->gtOp1; // c
+                    oper = GT_SUB;
+                    tree->SetOper(oper);
+                    tree->AsOp()->gtOp1 = op2;
+                    tree->AsOp()->gtOp2 = op1Child;
+
+                    DEBUG_DESTROY_NODE(op1);
+
+                    op1 = op2;
+                    op2 = op1Child;
                 }
             }
             /* See if we can fold GT_MUL by const nodes */
